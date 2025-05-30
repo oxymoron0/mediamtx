@@ -23,18 +23,9 @@ RUN apt-get update && apt install -y \
     nasm \
     yasm \
     cmake \
-    libass-dev \
-    libfreetype-dev \
-    libfontconfig-dev \
     libx264-dev \
     libx265-dev \
     libnuma-dev \
-    libvpx-dev \
-    libfdk-aac-dev \
-    libmp3lame-dev \
-    libopus-dev \
-    libvorbis-dev \
-    libxvidcore-dev \
     libtool-bin \
     pkg-config
 
@@ -57,15 +48,6 @@ RUN git clone https://git.ffmpeg.org/ffmpeg.git /usr/src/ffmpeg && \
     --enable-cuvid \
     --enable-libx264 \
     --enable-libx265 \
-    --enable-libfdk-aac \
-    --enable-libmp3lame \
-    --enable-libopus \
-    --enable-libfreetype \
-    --enable-fontconfig \
-    --enable-libvpx \
-    --enable-libvorbis \
-    --enable-libxvid \
-    --enable-libass \
     --extra-cflags="-I/usr/local/cuda/include -I/usr/local/include/ffnvcodec" \
     --extra-ldflags="-L/usr/local/cuda/lib64" \
     --disable-static && \
@@ -76,6 +58,17 @@ RUN git clone https://git.ffmpeg.org/ffmpeg.git /usr/src/ffmpeg && \
 FROM debian:${DEBIAN_VERSION}
 ENV TZ=${BUILD_HOST_TZ:-Asia/Seoul}
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Prepare apt for buildkit cache
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+  && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' >/etc/apt/apt.conf.d/keep-cache
+  
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    echo 'deb http://deb.debian.org/debian trixie non-free' > /etc/apt/sources.list.d/debian-non-free.list && \
+    apt-get -y update && apt-get -y install \
+        libx264-dev \
+        libx265-dev
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETPLATFORM
 COPY --from=binaries /$TARGETPLATFORM /
