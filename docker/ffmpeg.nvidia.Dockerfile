@@ -67,12 +67,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
     echo 'deb http://deb.debian.org/debian trixie non-free' > /etc/apt/sources.list.d/debian-non-free.list && \
     apt-get -y update && apt-get -y install \
         libx264-dev \
-        libx265-dev
+        libx265-dev \
+        libasound2-plugins && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETPLATFORM
 COPY --from=binaries /$TARGETPLATFORM /
 COPY --from=ffmpeg-builder /usr/local/ffmpeg_cuda /usr/local/ffmpeg_cuda
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
