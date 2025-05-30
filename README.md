@@ -184,6 +184,17 @@ Download and launch the image:
 docker run --rm -it --network=host bluenviron/mediamtx:latest
 ```
 
+```
+docker run \
+  -it \
+  --rm \
+  --name=test \
+  --gpus all \
+  -v .:/workspace \
+  -p 8554:8554 \
+  bluenviron/mediamtx:nvidia_ffmpeg
+```
+
 Available images:
 
 |name|FFmpeg included|RPI Camera support|
@@ -2597,7 +2608,8 @@ The official Docker image can be recompiled by following these steps:
    docker build . -f docker/standard.Dockerfile -t my-mediamtx
    ```
 
-   A Dockerfile is available for each image variant (`standard.Dockerfile`, `ffmpeg.Dockerfile`, `rpi.Dockerfile`, `ffmpeg-rpi.Dockerfile`).
+
+   A Dockerfile is available for each image variant (`standard.Dockerfile`, `ffmpeg.Dockerfile`, `rpi.Dockerfile`, `ffmpeg-rpi.Dockerfile`, `ffmpeg.nvidia.Dockerfile`).
 
 ## License
 
