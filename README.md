@@ -188,11 +188,11 @@ docker run --rm -it --network=host bluenviron/mediamtx:latest
 docker run \
   -it \
   --rm \
-  --name=test \
+  --name=mediamtx \
   --gpus all \
-  -v .:/workspace \
+  -v ./mediamtx.yml:/mediamtx.yml \
   -p 8554:8554 \
-  bluenviron/mediamtx:nvidia_ffmpeg
+  bluenviron/mediamtx:nvidia-ffmpeg
 ```
 
 Available images:
