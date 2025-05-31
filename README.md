@@ -191,6 +191,7 @@ docker run \
   --name=mediamtx \
   --gpus all \
   -v ./mediamtx.yml:/mediamtx.yml \
+  -v ./ffmpeg:/ffmpeg \
   -p 8554:8554 \
   bluenviron/mediamtx:nvidia-ffmpeg
 ```
