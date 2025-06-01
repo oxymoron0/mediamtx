@@ -68,7 +68,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
     apt-get -y update && apt-get -y install \
         libx264-dev \
         libx265-dev \
-        libasound2-plugins && \
+        libasound2-plugins \
+        jq && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETPLATFORM
