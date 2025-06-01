@@ -1,13 +1,14 @@
 services:
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    image: oxymoron0/mediamtx:nvidia-ffmpeg
     container_name: mediamtx
     restart: always
     ports:
       - "8554:8554"
     volumes:
-      - ./mediamtx.yml:/mediamtx.yml
+      - ./mediamtx_custom.yml:/mediamtx.yml
       - ./ffmpeg/:/ffmpeg/
+      - ../sources/:/sources/
     deploy:
       resources:
         reservations:
