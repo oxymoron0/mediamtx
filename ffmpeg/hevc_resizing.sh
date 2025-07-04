@@ -29,6 +29,7 @@ SIZES["FHD"]="1920x1080:5M"
 SIZES["HD"]="1280x720:3M"
 SIZES["FWVGA"]="854x480:1M"
 SIZES["VGA"]="640x480:1M"
+SIZES["CGA"]="320x200:1M"
 
 if [ -z "${SIZES[$SIZE_NAME]}" ]; then
   echo "Error: Unknown size name '${SIZE_NAME}'. Supported sizes are: ${!SIZES[*]}"
