@@ -5,8 +5,11 @@ services:
     restart: always
     ports:
       - "8554:8554"
+      - "8189:8189"
+      - "8889:8889"
+      - "9997:9997"
     volumes:
-      - ./mediamtx_custom.yml:/mediamtx.yml
+      - ./mediamtx.yml:/mediamtx.yml
       - ./ffmpeg/:/ffmpeg/
       - ../sources/:/sources/
     deploy:
