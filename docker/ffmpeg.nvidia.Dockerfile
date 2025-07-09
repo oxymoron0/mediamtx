@@ -1,3 +1,4 @@
+# make binaries
 # docker build . -f docker/ffmpeg.nvidia.Dockerfile -t oxymoron0/mediamtx:nvidia-ffmpeg
 
 ARG CUDA_VERSION="12.9.0"
