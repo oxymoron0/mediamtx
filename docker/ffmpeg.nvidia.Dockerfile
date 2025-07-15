@@ -1,9 +1,9 @@
 # make binaries
 # docker build . -f docker/ffmpeg.nvidia.Dockerfile -t oxymoron0/mediamtx:nvidia-ffmpeg
 
-ARG CUDA_VERSION="12.9.0"
-ARG UBUNTU_VERSION="24.04"
-ARG DEBIAN_VERSION="bookworm-slim"
+ARG CUDA_VERSION "12.9.0"
+ARG UBUNTU_VERSION "24.04"
+ARG DEBIAN_VERSION "bookworm-slim"
 
 #################################################################
 FROM --platform=linux/amd64 scratch AS binaries
