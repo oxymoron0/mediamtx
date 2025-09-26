@@ -43,3 +43,60 @@ _MediaMTX_ is a ready-to-use and zero-dependency real-time media server and medi
 - [Run hooks](https://mediamtx.org/docs/usage/hooks) (external commands) when clients connect, disconnect, read or publish streams
 - Compatible with Linux, Windows and macOS, does not require any dependency or interpreter, it's a single executable
 - ...and many [others](https://mediamtx.org/docs/kickoff/introduction).
+
+
+### Standalone binary
+
+1. Download and extract a standalone binary from the [release page](https://github.com/bluenviron/mediamtx/releases) that corresponds to your operating system and architecture.
+
+2. Start the server:
+
+   ```sh
+   ./mediamtx
+   ```
+
+### Docker image
+
+Download and launch the image:
+
+```
+docker run --rm -it --network=host bluenviron/mediamtx:latest
+```
+
+```
+docker run \
+  -it \
+  --rm \
+  --name=mediamtx \
+  --gpus all \
+  -v ./mediamtx.yml:/mediamtx.yml \
+  -v ./ffmpeg:/ffmpeg \
+  -p 8554:8554 \
+  bluenviron/mediamtx:nvidia-ffmpeg
+```
+
+Available images:
+
+|name|FFmpeg included|RPI Camera support|
+|----|---------------|------------------|
+|bluenviron/mediamtx:latest|:x:|:x:|
+|bluenviron/mediamtx:latest-ffmpeg|:heavy_check_mark:|:x:|
+|bluenviron/mediamtx:latest-rpi|:x:|:heavy_check_mark:|
+|bluenviron/mediamtx:latest-ffmpeg-rpi|:heavy_check_mark:|:heavy_check_mark:|
+
+The `--network=host` flag is mandatory for RTSP to work, since Docker can change the source port of UDP packets for routing reasons, and this doesn't allow the server to identify the senders of the packets.
+
+If the `--network=host` cannot be used (for instance, it is not compatible with Windows or Kubernetes), you can disable the RTSP UDP transport protocol, add the server IP to `MTX_WEBRTCADDITIONALHOSTS` and expose ports manually:
+
+```
+docker run --rm -it \
+-e MTX_RTSPTRANSPORTS=tcp \
+-e MTX_WEBRTCADDITIONALHOSTS=192.168.x.x \
+-p 8554:8554 \
+-p 1935:1935 \
+-p 8888:8888 \
+-p 8889:8889 \
+-p 8890:8890/udp \
+-p 8189:8189/udp \
+bluenviron/mediamtx
+```
