@@ -7,10 +7,11 @@ import (
 	"io"
 	"time"
 
-	rtspformat "github.com/bluenviron/gortsplib/v4/pkg/format"
+	rtspformat "github.com/bluenviron/gortsplib/v5/pkg/format"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/ac3"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4video"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/mpegts"
 
@@ -20,7 +21,7 @@ import (
 )
 
 const (
-	mpegtsMaxBufferSize = 64 * 1024
+	mpegtsBufferSize = 64 * 1024
 )
 
 func multiplyAndDivide(v, m, d int64) int64 {
@@ -93,6 +94,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.H265)
+
 						if tunit.AU == nil {
 							return nil
 						}
@@ -138,6 +140,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.H264)
+
 						if tunit.AU == nil {
 							return nil
 						}
@@ -184,6 +187,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.MPEG4Video)
+
 						if tunit.Frame == nil {
 							return nil
 						}
@@ -223,6 +227,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.MPEG1Video)
+
 						if tunit.Frame == nil {
 							return nil
 						}
@@ -261,6 +266,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.Opus)
+
 						if tunit.Packets == nil {
 							return nil
 						}
@@ -290,6 +296,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.KLV)
+
 						if tunit.Unit == nil {
 							return nil
 						}
@@ -306,12 +313,39 @@ func (f *formatMPEGTS) initialize() bool {
 					})
 
 			case *rtspformat.MPEG4Audio:
-				co := forma.GetConfig()
-				if co == nil {
-					f.ri.Log(logger.Warn, "skipping MPEG-4 audio track: tracks without explicit configuration are not supported")
-				} else {
+				track := addTrack(forma, &mpegts.CodecMPEG4Audio{
+					Config: *forma.Config,
+				})
+
+				f.ri.stream.AddReader(
+					f.ri,
+					media,
+					forma,
+					func(u unit.Unit) error {
+						tunit := u.(*unit.MPEG4Audio)
+
+						if tunit.AUs == nil {
+							return nil
+						}
+
+						return f.write(
+							timestampToDuration(tunit.PTS, clockRate),
+							tunit.NTP,
+							false,
+							true,
+							func() error {
+								return f.mw.WriteMPEG4Audio(
+									track,
+									multiplyAndDivide(tunit.PTS, 90000, int64(clockRate)),
+									tunit.AUs)
+							},
+						)
+					})
+
+			case *rtspformat.MPEG4AudioLATM:
+				if !forma.CPresent {
 					track := addTrack(forma, &mpegts.CodecMPEG4Audio{
-						Config: *co,
+						Config: *forma.StreamMuxConfig.Programs[0].Layers[0].AudioSpecificConfig,
 					})
 
 					f.ri.stream.AddReader(
@@ -319,9 +353,17 @@ func (f *formatMPEGTS) initialize() bool {
 						media,
 						forma,
 						func(u unit.Unit) error {
-							tunit := u.(*unit.MPEG4Audio)
-							if tunit.AUs == nil {
+							tunit := u.(*unit.MPEG4AudioLATM)
+
+							if tunit.Element == nil {
 								return nil
+							}
+
+							var ame mpeg4audio.AudioMuxElement
+							ame.StreamMuxConfig = forma.StreamMuxConfig
+							err := ame.Unmarshal(tunit.Element)
+							if err != nil {
+								return err
 							}
 
 							return f.write(
@@ -333,7 +375,7 @@ func (f *formatMPEGTS) initialize() bool {
 									return f.mw.WriteMPEG4Audio(
 										track,
 										multiplyAndDivide(tunit.PTS, 90000, int64(clockRate)),
-										tunit.AUs)
+										[][]byte{ame.Payloads[0][0][0]})
 								},
 							)
 						})
@@ -348,6 +390,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.MPEG1Audio)
+
 						if tunit.Frames == nil {
 							return nil
 						}
@@ -375,6 +418,7 @@ func (f *formatMPEGTS) initialize() bool {
 					forma,
 					func(u unit.Unit) error {
 						tunit := u.(*unit.AC3)
+
 						if tunit.Frames == nil {
 							return nil
 						}
@@ -421,7 +465,7 @@ func (f *formatMPEGTS) initialize() bool {
 	}
 
 	f.dw = &dynamicWriter{}
-	f.bw = bufio.NewWriterSize(f.dw, mpegtsMaxBufferSize)
+	f.bw = bufio.NewWriterSize(f.dw, mpegtsBufferSize)
 
 	f.mw = &mpegts.Writer{W: f.bw, Tracks: tracks}
 	err := f.mw.Initialize()

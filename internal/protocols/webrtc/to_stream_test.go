@@ -1,11 +1,10 @@
 package webrtc
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/format"
+	"github.com/bluenviron/gortsplib/v5/pkg/format"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/test"
@@ -365,7 +364,7 @@ func TestToStream(t *testing.T) {
 			offer, err := pc1.CreatePartialOffer()
 			require.NoError(t, err)
 
-			answer, err := pc2.CreateFullAnswer(context.Background(), offer)
+			answer, err := pc2.CreateFullAnswer(offer)
 			require.NoError(t, err)
 
 			err = pc1.SetAnswer(answer)
@@ -384,10 +383,10 @@ func TestToStream(t *testing.T) {
 				}
 			}()
 
-			err = pc1.WaitUntilConnected(context.Background())
+			err = pc1.WaitUntilConnected()
 			require.NoError(t, err)
 
-			err = pc2.WaitUntilConnected(context.Background())
+			err = pc2.WaitUntilConnected()
 			require.NoError(t, err)
 
 			err = pc1.OutgoingTracks[0].WriteRTP(&rtp.Packet{
@@ -403,7 +402,7 @@ func TestToStream(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			err = pc2.GatherIncomingTracks(context.Background())
+			err = pc2.GatherIncomingTracks()
 			require.NoError(t, err)
 
 			var stream *stream.Stream

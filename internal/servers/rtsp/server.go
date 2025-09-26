@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4"
-	"github.com/bluenviron/gortsplib/v4/pkg/auth"
-	"github.com/bluenviron/gortsplib/v4/pkg/base"
-	"github.com/bluenviron/gortsplib/v4/pkg/liberrors"
+	"github.com/bluenviron/gortsplib/v5"
+	"github.com/bluenviron/gortsplib/v5/pkg/auth"
+	"github.com/bluenviron/gortsplib/v5/pkg/base"
+	"github.com/bluenviron/gortsplib/v5/pkg/liberrors"
 	"github.com/google/uuid"
 
 	"github.com/bluenviron/mediamtx/internal/certloader"
@@ -58,8 +58,9 @@ type serverMetrics interface {
 }
 
 type serverPathManager interface {
+	FindPathConf(req defs.PathFindPathConfReq) (*conf.Path, error)
 	Describe(req defs.PathDescribeReq) defs.PathDescribeRes
-	AddPublisher(_ defs.PathAddPublisherReq) (defs.Path, error)
+	AddPublisher(_ defs.PathAddPublisherReq) (defs.Path, *stream.Stream, error)
 	AddReader(_ defs.PathAddReaderReq) (defs.Path, *stream.Stream, error)
 }
 
@@ -71,6 +72,7 @@ type serverParent interface {
 type Server struct {
 	Address             string
 	AuthMethods         []auth.VerifyMethod
+	UDPReadBufferSize   uint
 	ReadTimeout         conf.Duration
 	WriteTimeout        conf.Duration
 	WriteQueueSize      int
@@ -112,12 +114,13 @@ func (s *Server) Initialize() error {
 	s.sessions = make(map[*gortsplib.ServerSession]*session)
 
 	s.srv = &gortsplib.Server{
-		Handler:        s,
-		ReadTimeout:    time.Duration(s.ReadTimeout),
-		WriteTimeout:   time.Duration(s.WriteTimeout),
-		WriteQueueSize: s.WriteQueueSize,
-		RTSPAddress:    s.Address,
-		AuthMethods:    s.AuthMethods,
+		Handler:           s,
+		ReadTimeout:       time.Duration(s.ReadTimeout),
+		WriteTimeout:      time.Duration(s.WriteTimeout),
+		UDPReadBufferSize: int(s.UDPReadBufferSize),
+		WriteQueueSize:    s.WriteQueueSize,
+		RTSPAddress:       s.Address,
+		AuthMethods:       s.AuthMethods,
 	}
 
 	if s.UseUDP {

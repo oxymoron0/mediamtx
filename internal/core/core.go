@@ -9,11 +9,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/bluenviron/gortsplib/v4"
+	"github.com/bluenviron/gortsplib/v5"
 	"github.com/gin-gonic/gin"
 
 	"github.com/bluenviron/mediamtx/internal/api"
@@ -191,6 +193,9 @@ func (p *Core) run() {
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
+	if runtime.GOOS == "linux" {
+		signal.Notify(interrupt, syscall.SIGTERM)
+	}
 
 outer:
 	for {
@@ -384,12 +389,13 @@ func (p *Core) createResources(initial bool) error {
 		(p.conf.RTSPEncryption == conf.EncryptionNo ||
 			p.conf.RTSPEncryption == conf.EncryptionOptional) &&
 		p.rtspServer == nil {
-		_, useUDP := p.conf.RTSPTransports[gortsplib.TransportUDP]
-		_, useMulticast := p.conf.RTSPTransports[gortsplib.TransportUDPMulticast]
+		_, useUDP := p.conf.RTSPTransports[gortsplib.ProtocolUDP]
+		_, useMulticast := p.conf.RTSPTransports[gortsplib.ProtocolUDPMulticast]
 
 		i := &rtsp.Server{
 			Address:             p.conf.RTSPAddress,
 			AuthMethods:         p.conf.RTSPAuthMethods,
+			UDPReadBufferSize:   p.conf.RTSPUDPReadBufferSize,
 			ReadTimeout:         p.conf.ReadTimeout,
 			WriteTimeout:        p.conf.WriteTimeout,
 			WriteQueueSize:      p.conf.WriteQueueSize,
@@ -424,12 +430,13 @@ func (p *Core) createResources(initial bool) error {
 		(p.conf.RTSPEncryption == conf.EncryptionStrict ||
 			p.conf.RTSPEncryption == conf.EncryptionOptional) &&
 		p.rtspsServer == nil {
-		_, useUDP := p.conf.RTSPTransports[gortsplib.TransportUDP]
-		_, useMulticast := p.conf.RTSPTransports[gortsplib.TransportUDPMulticast]
+		_, useUDP := p.conf.RTSPTransports[gortsplib.ProtocolUDP]
+		_, useMulticast := p.conf.RTSPTransports[gortsplib.ProtocolUDPMulticast]
 
 		i := &rtsp.Server{
 			Address:             p.conf.RTSPSAddress,
 			AuthMethods:         p.conf.RTSPAuthMethods,
+			UDPReadBufferSize:   p.conf.RTSPUDPReadBufferSize,
 			ReadTimeout:         p.conf.ReadTimeout,
 			WriteTimeout:        p.conf.WriteTimeout,
 			WriteQueueSize:      p.conf.WriteQueueSize,
@@ -725,6 +732,7 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		newConf.RTSPEncryption != p.conf.RTSPEncryption ||
 		newConf.RTSPAddress != p.conf.RTSPAddress ||
 		!reflect.DeepEqual(newConf.RTSPAuthMethods, p.conf.RTSPAuthMethods) ||
+		newConf.RTSPUDPReadBufferSize != p.conf.RTSPUDPReadBufferSize ||
 		newConf.ReadTimeout != p.conf.ReadTimeout ||
 		newConf.WriteTimeout != p.conf.WriteTimeout ||
 		newConf.WriteQueueSize != p.conf.WriteQueueSize ||
@@ -747,6 +755,7 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		newConf.RTSPEncryption != p.conf.RTSPEncryption ||
 		newConf.RTSPSAddress != p.conf.RTSPSAddress ||
 		!reflect.DeepEqual(newConf.RTSPAuthMethods, p.conf.RTSPAuthMethods) ||
+		newConf.RTSPUDPReadBufferSize != p.conf.RTSPUDPReadBufferSize ||
 		newConf.ReadTimeout != p.conf.ReadTimeout ||
 		newConf.WriteTimeout != p.conf.WriteTimeout ||
 		newConf.WriteQueueSize != p.conf.WriteQueueSize ||

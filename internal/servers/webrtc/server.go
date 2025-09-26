@@ -26,6 +26,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/logger"
+	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
 	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 	"github.com/bluenviron/mediamtx/internal/stream"
 )
@@ -174,7 +175,7 @@ type serverMetrics interface {
 
 type serverPathManager interface {
 	FindPathConf(req defs.PathFindPathConfReq) (*conf.Path, error)
-	AddPublisher(req defs.PathAddPublisherReq) (defs.Path, error)
+	AddPublisher(req defs.PathAddPublisherReq) (defs.Path, *stream.Stream, error)
 	AddReader(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error)
 }
 
@@ -211,7 +212,7 @@ type Server struct {
 	udpMuxLn         net.PacketConn
 	tcpMuxLn         net.Listener
 	iceUDPMux        ice.UDPMux
-	iceTCPMux        ice.TCPMux
+	iceTCPMux        *webrtc.TCPMuxWrapper
 	sessions         map[*session]struct{}
 	sessionsBySecret map[uuid.UUID]*session
 
@@ -275,12 +276,17 @@ func (s *Server) Initialize() error {
 	if s.LocalTCPAddress != "" {
 		s.tcpMuxLn, err = net.Listen(restrictnetwork.Restrict("tcp", s.LocalTCPAddress))
 		if err != nil {
-			s.udpMuxLn.Close()
+			if s.udpMuxLn != nil {
+				s.udpMuxLn.Close()
+			}
 			s.httpServer.close()
 			ctxCancel()
 			return err
 		}
-		s.iceTCPMux = pwebrtc.NewICETCPMux(webrtcNilLogger, s.tcpMuxLn, 8)
+		s.iceTCPMux = &webrtc.TCPMuxWrapper{
+			Mux: pwebrtc.NewICETCPMux(webrtcNilLogger, s.tcpMuxLn, 8),
+			Ln:  s.tcpMuxLn,
+		}
 	}
 
 	str := "listener opened on " + s.Address + " (HTTP)"

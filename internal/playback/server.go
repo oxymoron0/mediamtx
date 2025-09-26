@@ -11,12 +11,11 @@ import (
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
-	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 	"github.com/gin-gonic/gin"
 )
 
 type serverAuthManager interface {
-	Authenticate(req *auth.Request) error
+	Authenticate(req *auth.Request) *auth.Error
 }
 
 // Server is the playback server.
@@ -46,11 +45,8 @@ func (s *Server) Initialize() error {
 	router.GET("/list", s.onList)
 	router.GET("/get", s.onGet)
 
-	network, address := restrictnetwork.Restrict("tcp", s.Address)
-
 	s.httpServer = &httpp.Server{
-		Network:     network,
-		Address:     address,
+		Address:     s.Address,
 		ReadTimeout: time.Duration(s.ReadTimeout),
 		Encryption:  s.Encryption,
 		ServerCert:  s.ServerCert,
@@ -63,7 +59,7 @@ func (s *Server) Initialize() error {
 		return err
 	}
 
-	s.Log(logger.Info, "listener opened on "+address)
+	s.Log(logger.Info, "listener opened on "+s.Address)
 
 	return nil
 }
@@ -127,16 +123,16 @@ func (s *Server) doAuth(ctx *gin.Context, pathName string) bool {
 
 	err := s.AuthManager.Authenticate(req)
 	if err != nil {
-		if err.(auth.Error).AskCredentials { //nolint:errorlint
+		if err.AskCredentials {
 			ctx.Header("WWW-Authenticate", `Basic realm="mediamtx"`)
 			ctx.Writer.WriteHeader(http.StatusUnauthorized)
 			return false
 		}
 
 		s.Log(logger.Info, "connection %v failed to authenticate: %v",
-			httpp.RemoteAddr(ctx), err.(*auth.Error).Message) //nolint:errorlint
+			httpp.RemoteAddr(ctx), err.Wrapped)
 
-		// wait some seconds to mitigate brute force attacks
+		// wait some seconds to delay brute force attacks
 		<-time.After(auth.PauseAfterError)
 
 		ctx.Writer.WriteHeader(http.StatusUnauthorized)

@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	rtspformat "github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
+	"github.com/bluenviron/gortsplib/v5/pkg/description"
+	rtspformat "github.com/bluenviron/gortsplib/v5/pkg/format"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/mp4"
@@ -41,7 +40,7 @@ func TestRecorder(t *testing.T) {
 			Type: description.MediaTypeAudio,
 			Formats: []rtspformat.Format{&rtspformat.MPEG4Audio{
 				PayloadTyp: 96,
-				Config: &mpeg4audio.Config{
+				Config: &mpeg4audio.AudioSpecificConfig{
 					Type:         2,
 					SampleRate:   44100,
 					ChannelCount: 2,
@@ -96,7 +95,7 @@ func TestRecorder(t *testing.T) {
 					test.FormatH265.VPS,
 					test.FormatH265.SPS,
 					test.FormatH265.PPS,
-					{byte(h265.NALUType_CRA_NUT) << 1, 0}, // IDR
+					{0x26, 0x1, 0xaf, 0x8, 0x42, 0x23, 0x48, 0x8a, 0x43, 0xe2},
 				},
 			})
 
@@ -165,6 +164,7 @@ func TestRecorder(t *testing.T) {
 				PathFormat:      recordPath,
 				Format:          f,
 				PartDuration:    100 * time.Millisecond,
+				MaxPartSize:     50 * 1024 * 1024,
 				SegmentDuration: 1 * time.Second,
 				PathName:        "mypath",
 				Stream:          strm,
@@ -257,7 +257,7 @@ func TestRecorder(t *testing.T) {
 							ID:        3,
 							TimeScale: 44100,
 							Codec: &mp4.CodecMPEG4Audio{
-								Config: mpeg4audio.Config{
+								Config: mpeg4audio.AudioSpecificConfig{
 									Type:         2,
 									SampleRate:   44100,
 									ChannelCount: 2,
@@ -327,7 +327,7 @@ func TestRecorderFMP4NegativeDTS(t *testing.T) {
 			Type: description.MediaTypeAudio,
 			Formats: []rtspformat.Format{&rtspformat.MPEG4Audio{
 				PayloadTyp: 96,
-				Config: &mpeg4audio.Config{
+				Config: &mpeg4audio.AudioSpecificConfig{
 					Type:         2,
 					SampleRate:   44100,
 					ChannelCount: 2,
@@ -360,6 +360,7 @@ func TestRecorderFMP4NegativeDTS(t *testing.T) {
 		PathFormat:      recordPath,
 		Format:          conf.RecordFormatFMP4,
 		PartDuration:    100 * time.Millisecond,
+		MaxPartSize:     50 * 1024 * 1024,
 		SegmentDuration: 1 * time.Second,
 		PathName:        "mypath",
 		Stream:          strm,
@@ -465,6 +466,7 @@ func TestRecorderSkipTracksPartial(t *testing.T) {
 				PathFormat:      recordPath,
 				Format:          fo,
 				PartDuration:    100 * time.Millisecond,
+				MaxPartSize:     50 * 1024 * 1024,
 				SegmentDuration: 1 * time.Second,
 				PathName:        "mypath",
 				Stream:          strm,
@@ -526,6 +528,7 @@ func TestRecorderSkipTracksFull(t *testing.T) {
 				PathFormat:      recordPath,
 				Format:          fo,
 				PartDuration:    100 * time.Millisecond,
+				MaxPartSize:     50 * 1024 * 1024,
 				SegmentDuration: 1 * time.Second,
 				PathName:        "mypath",
 				Stream:          strm,
@@ -572,6 +575,7 @@ func TestRecorderFMP4SegmentSwitch(t *testing.T) {
 		PathFormat:      filepath.Join(dir, "%path/%Y-%m-%d_%H-%M-%S-%f"),
 		Format:          conf.RecordFormatFMP4,
 		PartDuration:    100 * time.Millisecond,
+		MaxPartSize:     50 * 1024 * 1024,
 		SegmentDuration: 1 * time.Second,
 		PathName:        "mypath",
 		Stream:          strm,

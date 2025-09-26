@@ -3,6 +3,7 @@ package webrtc
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -10,11 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	"github.com/bluenviron/gortsplib/v4/pkg/format"
+	"github.com/bluenviron/gortsplib/v5/pkg/description"
+	"github.com/bluenviron/gortsplib/v5/pkg/format"
+	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
+	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
 	"github.com/bluenviron/mediamtx/internal/protocols/whip"
 	"github.com/bluenviron/mediamtx/internal/stream"
@@ -26,7 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func uint16Ptr(v uint16) *uint16 {
+func ptrOf[T any](v T) *T {
 	return &v
 }
 
@@ -34,10 +37,7 @@ func checkClose(t *testing.T, closeFunc func() error) {
 	require.NoError(t, closeFunc())
 }
 
-type dummyPath struct {
-	stream        *stream.Stream
-	streamCreated chan struct{}
-}
+type dummyPath struct{}
 
 func (p *dummyPath) Name() string {
 	return "teststream"
@@ -49,26 +49,6 @@ func (p *dummyPath) SafeConf() *conf.Path {
 
 func (p *dummyPath) ExternalCmdEnv() externalcmd.Environment {
 	return externalcmd.Environment{}
-}
-
-func (p *dummyPath) StartPublisher(req defs.PathStartPublisherReq) (*stream.Stream, error) {
-	p.stream = &stream.Stream{
-		WriteQueueSize:     512,
-		RTPMaxPayloadSize:  1450,
-		Desc:               req.Desc,
-		GenerateRTPPackets: true,
-		Parent:             test.NilLogger,
-	}
-	err := p.stream.Initialize()
-	if err != nil {
-		return nil, err
-	}
-
-	close(p.streamCreated)
-	return p.stream, nil
-}
-
-func (p *dummyPath) StopPublisher(_ defs.PathStopPublisherReq) {
 }
 
 func (p *dummyPath) RemovePublisher(_ defs.PathRemovePublisherReq) {
@@ -86,9 +66,6 @@ func initializeTestServer(t *testing.T) *Server {
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
-		Encryption:            false,
-		ServerKey:             "",
-		ServerCert:            "",
 		AllowOrigin:           "*",
 		TrustedProxies:        conf.IPNetworks{},
 		ReadTimeout:           conf.Duration(10 * time.Second),
@@ -101,7 +78,6 @@ func initializeTestServer(t *testing.T) *Server {
 		HandshakeTimeout:      conf.Duration(10 * time.Second),
 		TrackGatherTimeout:    conf.Duration(2 * time.Second),
 		STUNGatherTimeout:     conf.Duration(5 * time.Second),
-		ExternalCmdPool:       nil,
 		PathManager:           pm,
 		Parent:                test.NilLogger,
 	}
@@ -171,10 +147,6 @@ func TestServerOptionsICEServer(t *testing.T) {
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
-		Encryption:            false,
-		ServerKey:             "",
-		ServerCert:            "",
-		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
 		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
@@ -190,7 +162,6 @@ func TestServerOptionsICEServer(t *testing.T) {
 		HandshakeTimeout:   conf.Duration(10 * time.Second),
 		TrackGatherTimeout: conf.Duration(2 * time.Second),
 		STUNGatherTimeout:  conf.Duration(5 * time.Second),
-		ExternalCmdPool:    nil,
 		PathManager:        pathManager,
 		Parent:             test.NilLogger,
 	}
@@ -223,9 +194,8 @@ func TestServerOptionsICEServer(t *testing.T) {
 }
 
 func TestServerPublish(t *testing.T) {
-	path := &dummyPath{
-		streamCreated: make(chan struct{}),
-	}
+	var strm *stream.Stream
+	streamCreated := make(chan struct{})
 
 	pathManager := &test.PathManager{
 		FindPathConfImpl: func(req defs.PathFindPathConfReq) (*conf.Path, error) {
@@ -235,21 +205,29 @@ func TestServerPublish(t *testing.T) {
 			require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
 			return &conf.Path{}, nil
 		},
-		AddPublisherImpl: func(req defs.PathAddPublisherReq) (defs.Path, error) {
+		AddPublisherImpl: func(req defs.PathAddPublisherReq) (defs.Path, *stream.Stream, error) {
 			require.Equal(t, "teststream", req.AccessRequest.Name)
 			require.Equal(t, "param=value", req.AccessRequest.Query)
-			require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
-			require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
-			return path, nil
+			require.True(t, req.AccessRequest.SkipAuth)
+
+			strm = &stream.Stream{
+				WriteQueueSize:     512,
+				RTPMaxPayloadSize:  1450,
+				Desc:               req.Desc,
+				GenerateRTPPackets: true,
+				Parent:             test.NilLogger,
+			}
+			err := strm.Initialize()
+			require.NoError(t, err)
+
+			close(streamCreated)
+
+			return &dummyPath{}, strm, nil
 		},
 	}
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
-		Encryption:            false,
-		ServerKey:             "",
-		ServerCert:            "",
-		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
 		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
@@ -261,7 +239,6 @@ func TestServerPublish(t *testing.T) {
 		HandshakeTimeout:      conf.Duration(10 * time.Second),
 		TrackGatherTimeout:    conf.Duration(2 * time.Second),
 		STUNGatherTimeout:     conf.Duration(5 * time.Second),
-		ExternalCmdPool:       nil,
 		PathManager:           pathManager,
 		Parent:                test.NilLogger,
 	}
@@ -309,16 +286,16 @@ func TestServerPublish(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	<-path.streamCreated
+	<-streamCreated
 
 	reader := test.NilLogger
 
 	recv := make(chan struct{})
 
-	path.stream.AddReader(
+	strm.AddReader(
 		reader,
-		path.stream.Desc.Medias[0],
-		path.stream.Desc.Medias[0].Formats[0],
+		strm.Desc.Medias[0],
+		strm.Desc.Medias[0].Formats[0],
 		func(u unit.Unit) error {
 			select {
 			case <-recv:
@@ -334,8 +311,8 @@ func TestServerPublish(t *testing.T) {
 			return nil
 		})
 
-	path.stream.StartReader(reader)
-	defer path.stream.RemoveReader(reader)
+	strm.StartReader(reader)
+	defer strm.RemoveReader(reader)
 
 	err = track.WriteRTP(&rtp.Packet{
 		Header: rtp.Header{
@@ -516,8 +493,6 @@ func TestServerRead(t *testing.T) {
 			err := strm.Initialize()
 			require.NoError(t, err)
 
-			path := &dummyPath{stream: strm}
-
 			pathManager := &test.PathManager{
 				FindPathConfImpl: func(req defs.PathFindPathConfReq) (*conf.Path, error) {
 					require.Equal(t, "teststream", req.AccessRequest.Name)
@@ -531,17 +506,12 @@ func TestServerRead(t *testing.T) {
 					require.Equal(t, "param=value", req.AccessRequest.Query)
 					require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
 					require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
-					return path, strm, nil
+					return &dummyPath{}, strm, nil
 				},
 			}
 
 			s := &Server{
 				Address:               "127.0.0.1:8886",
-				Encryption:            false,
-				ServerKey:             "",
-				ServerCert:            "",
-				AllowOrigin:           "",
-				TrustedProxies:        conf.IPNetworks{},
 				ReadTimeout:           conf.Duration(10 * time.Second),
 				LocalUDPAddress:       "127.0.0.1:8887",
 				LocalTCPAddress:       "127.0.0.1:8887",
@@ -552,7 +522,6 @@ func TestServerRead(t *testing.T) {
 				HandshakeTimeout:      conf.Duration(10 * time.Second),
 				TrackGatherTimeout:    conf.Duration(2 * time.Second),
 				STUNGatherTimeout:     conf.Duration(5 * time.Second),
-				ExternalCmdPool:       nil,
 				PathManager:           pathManager,
 				Parent:                test.NilLogger,
 			}
@@ -626,10 +595,6 @@ func TestServerReadNotFound(t *testing.T) {
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
-		Encryption:            false,
-		ServerKey:             "",
-		ServerCert:            "",
-		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
 		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
@@ -641,7 +606,6 @@ func TestServerReadNotFound(t *testing.T) {
 		HandshakeTimeout:      conf.Duration(10 * time.Second),
 		TrackGatherTimeout:    conf.Duration(2 * time.Second),
 		STUNGatherTimeout:     conf.Duration(5 * time.Second),
-		ExternalCmdPool:       nil,
 		PathManager:           pm,
 		Parent:                test.NilLogger,
 	}
@@ -696,7 +660,7 @@ func TestServerPatchNotFound(t *testing.T) {
 
 	frag, err := whip.ICEFragmentMarshal(offer.SDP, []*pwebrtc.ICECandidateInit{{
 		Candidate:     "mycandidate",
-		SDPMLineIndex: uint16Ptr(0),
+		SDPMLineIndex: ptrOf(uint16(0)),
 	}})
 	require.NoError(t, err)
 
@@ -767,4 +731,58 @@ func TestICEServerClientOnly(t *testing.T) {
 	serverICEServers, err := s.generateICEServers(false)
 	require.NoError(t, err)
 	require.Empty(t, serverICEServers)
+}
+
+func TestAuthError(t *testing.T) {
+	n := 0
+
+	s := &Server{
+		Address:     "127.0.0.1:8886",
+		ReadTimeout: conf.Duration(10 * time.Second),
+		PathManager: &test.PathManager{
+			FindPathConfImpl: func(req defs.PathFindPathConfReq) (*conf.Path, error) {
+				if req.AccessRequest.Credentials.User == "" && req.AccessRequest.Credentials.Pass == "" {
+					return nil, &auth.Error{AskCredentials: true}
+				}
+
+				return nil, &auth.Error{Wrapped: fmt.Errorf("auth error")}
+			},
+		},
+		Parent: test.Logger(func(l logger.Level, s string, i ...interface{}) {
+			if l == logger.Info {
+				if n == 1 {
+					require.Regexp(t, "failed to authenticate: auth error$", fmt.Sprintf(s, i...))
+				}
+				n++
+			}
+		}),
+	}
+	err := s.Initialize()
+	require.NoError(t, err)
+	defer s.Close()
+
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8886/stream/publish", nil)
+	require.NoError(t, err)
+
+	res, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	require.Equal(t, `Basic realm="mediamtx"`, res.Header.Get("WWW-Authenticate"))
+
+	req, err = http.NewRequest(http.MethodGet, "http://myuser:mypass@127.0.0.1:8886/stream/publish", nil)
+	require.NoError(t, err)
+
+	start := time.Now()
+
+	res, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Greater(t, time.Since(start), 2*time.Second)
+
+	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
+
+	require.Equal(t, 2, n)
 }

@@ -13,11 +13,10 @@ import (
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
-	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 )
 
 type pprofAuthManager interface {
-	Authenticate(req *auth.Request) error
+	Authenticate(req *auth.Request) *auth.Error
 }
 
 type pprofParent interface {
@@ -49,11 +48,8 @@ func (pp *PPROF) Initialize() error {
 
 	pprof.Register(router)
 
-	network, address := restrictnetwork.Restrict("tcp", pp.Address)
-
 	pp.httpServer = &httpp.Server{
-		Network:     network,
-		Address:     address,
+		Address:     pp.Address,
 		ReadTimeout: time.Duration(pp.ReadTimeout),
 		Encryption:  pp.Encryption,
 		ServerCert:  pp.ServerCert,
@@ -66,7 +62,7 @@ func (pp *PPROF) Initialize() error {
 		return err
 	}
 
-	pp.Log(logger.Info, "listener opened on "+address)
+	pp.Log(logger.Info, "listener opened on "+pp.Address)
 
 	return nil
 }
@@ -106,13 +102,15 @@ func (pp *PPROF) middlewareAuth(ctx *gin.Context) {
 
 	err := pp.AuthManager.Authenticate(req)
 	if err != nil {
-		if err.(auth.Error).AskCredentials { //nolint:errorlint
+		if err.AskCredentials {
 			ctx.Header("WWW-Authenticate", `Basic realm="mediamtx"`)
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
-		// wait some seconds to mitigate brute force attacks
+		pp.Log(logger.Info, "connection %v failed to authenticate: %v", httpp.RemoteAddr(ctx), err.Wrapped)
+
+		// wait some seconds to delay brute force attacks
 		<-time.After(auth.PauseAfterError)
 
 		ctx.AbortWithStatus(http.StatusUnauthorized)

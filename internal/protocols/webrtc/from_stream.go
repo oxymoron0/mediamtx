@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtpav1"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph264"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtph265"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtplpcm"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtpvp8"
-	"github.com/bluenviron/gortsplib/v4/pkg/format/rtpvp9"
+	"github.com/bluenviron/gortsplib/v5/pkg/format"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtpav1"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtph264"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtph265"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtplpcm"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtpvp8"
+	"github.com/bluenviron/gortsplib/v5/pkg/format/rtpvp9"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/g711"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/stream"
@@ -28,7 +28,7 @@ var errNoSupportedCodecsFrom = errors.New(
 	"the stream doesn't contain any supported codec, which are currently " +
 		"AV1, VP9, VP8, H265, H264, Opus, G722, G711, LPCM")
 
-func uint16Ptr(v uint16) *uint16 {
+func ptrOf[T any](v T) *T {
 	return &v
 }
 
@@ -88,8 +88,8 @@ func setupVideoTrack(
 					return nil
 				}
 
-				packets, err := encoder.Encode(tunit.TU)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.TU)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 
@@ -121,7 +121,7 @@ func setupVideoTrack(
 		encoder := &rtpvp9.Encoder{
 			PayloadType:      96,
 			PayloadMaxSize:   webrtcPayloadMaxSize,
-			InitialPictureID: uint16Ptr(8445),
+			InitialPictureID: ptrOf(uint16(8445)),
 		}
 		err := encoder.Init()
 		if err != nil {
@@ -139,8 +139,8 @@ func setupVideoTrack(
 					return nil
 				}
 
-				packets, err := encoder.Encode(tunit.Frame)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.Frame)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 
@@ -188,8 +188,8 @@ func setupVideoTrack(
 					return nil
 				}
 
-				packets, err := encoder.Encode(tunit.Frame)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.Frame)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 
@@ -248,8 +248,8 @@ func setupVideoTrack(
 				}
 				lastPTS = tunit.PTS
 
-				packets, err := encoder.Encode(tunit.AU)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.AU)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 
@@ -308,8 +308,8 @@ func setupVideoTrack(
 				}
 				lastPTS = tunit.PTS
 
-				packets, err := encoder.Encode(tunit.AU)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.AU)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 
@@ -535,8 +535,8 @@ func setupAudioTrack(
 						lpcm = al
 					}
 
-					packets, err := encoder.Encode(lpcm)
-					if err != nil {
+					packets, err2 := encoder.Encode(lpcm)
+					if err2 != nil {
 						return nil //nolint:nilerr
 					}
 
@@ -613,8 +613,8 @@ func setupAudioTrack(
 					return nil
 				}
 
-				packets, err := encoder.Encode(tunit.Samples)
-				if err != nil {
+				packets, err2 := encoder.Encode(tunit.Samples)
+				if err2 != nil {
 					return nil //nolint:nilerr
 				}
 

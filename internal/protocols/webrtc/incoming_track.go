@@ -1,10 +1,10 @@
 package webrtc
 
 import (
+	"sync/atomic"
 	"time"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/rtcpreceiver"
-	"github.com/bluenviron/gortsplib/v4/pkg/rtpreorderer"
+	"github.com/bluenviron/gortsplib/v5/pkg/rtpreceiver"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
@@ -244,9 +244,11 @@ type IncomingTrack struct {
 	receiver             *webrtc.RTPReceiver
 	writeRTCP            func([]rtcp.Packet) error
 	log                  logger.Writer
+	rtpPacketsReceived   *uint64
+	rtpPacketsLost       *uint64
 
 	packetsLost  *counterdumper.CounterDumper
-	rtcpReceiver *rtcpreceiver.RTCPReceiver
+	rtcpReceiver *rtpreceiver.Receiver
 }
 
 func (t *IncomingTrack) initialize() {
@@ -283,9 +285,10 @@ func (t *IncomingTrack) start() {
 	}
 	t.packetsLost.Start()
 
-	t.rtcpReceiver = &rtcpreceiver.RTCPReceiver{
-		ClockRate: int(t.track.SSRC()),
-		Period:    1 * time.Second,
+	t.rtcpReceiver = &rtpreceiver.Receiver{
+		ClockRate:            int(t.track.Codec().ClockRate),
+		UnrealiableTransport: true,
+		Period:               1 * time.Second,
 		WritePacketRTCP: func(p rtcp.Packet) {
 			t.writeRTCP([]rtcp.Packet{p}) //nolint:errcheck
 		},
@@ -295,18 +298,19 @@ func (t *IncomingTrack) start() {
 		panic(err)
 	}
 
-	// incoming RTCP packets must always be read to make interceptors work
+	// read incoming RTCP packets.
+	// incoming RTCP packets must always be read to make interceptors work.
 	go func() {
 		buf := make([]byte, 1500)
 		for {
-			n, _, err := t.receiver.Read(buf)
-			if err != nil {
+			n, _, err2 := t.receiver.Read(buf)
+			if err2 != nil {
 				return
 			}
 
-			pkts, err := rtcp.Unmarshal(buf[:n])
-			if err != nil {
-				panic(err)
+			pkts, err2 := rtcp.Unmarshal(buf[:n])
+			if err2 != nil {
+				panic(err2)
 			}
 
 			for _, pkt := range pkts {
@@ -324,40 +328,38 @@ func (t *IncomingTrack) start() {
 			defer keyframeTicker.Stop()
 
 			for range keyframeTicker.C {
-				err := t.writeRTCP([]rtcp.Packet{
+				err2 := t.writeRTCP([]rtcp.Packet{
 					&rtcp.PictureLossIndication{
 						MediaSSRC: uint32(t.track.SSRC()),
 					},
 				})
-				if err != nil {
+				if err2 != nil {
 					return
 				}
 			}
 		}()
 	}
 
-	// read incoming RTP packets
+	// read incoming RTP packets.
 	go func() {
-		reorderer := &rtpreorderer.Reorderer{}
-		reorderer.Initialize()
-
 		for {
-			pkt, _, err := t.track.ReadRTP()
-			if err != nil {
+			pkt, _, err2 := t.track.ReadRTP()
+			if err2 != nil {
 				return
 			}
 
-			packets, lost := reorderer.Process(pkt)
+			packets, lost, err2 := t.rtcpReceiver.ProcessPacket(pkt, time.Now(), true)
+			if err2 != nil {
+				t.log.Log(logger.Warn, err2.Error())
+				continue
+			}
 			if lost != 0 {
-				t.packetsLost.Add(uint64(lost))
+				atomic.AddUint64(t.rtpPacketsLost, lost)
+				t.packetsLost.Add(lost)
 				// do not return
 			}
 
-			err = t.rtcpReceiver.ProcessPacket(pkt, time.Now(), true)
-			if err != nil {
-				t.log.Log(logger.Warn, err.Error())
-				continue
-			}
+			atomic.AddUint64(t.rtpPacketsReceived, uint64(len(packets)))
 
 			var ntp time.Time
 			if t.useAbsoluteTimestamp {

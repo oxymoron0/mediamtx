@@ -16,6 +16,7 @@ import (
 
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/mp4"
+	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/test"
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,8 @@ func TestOnList(t *testing.T) {
 				writeSegment1(t, filepath.Join(dir, "mypath", "2008-11-07_11-22-00-500000.mp4"))
 			}
 
+			checked := false
+
 			s := &Server{
 				Address:     "127.0.0.1:9996",
 				ReadTimeout: conf.Duration(10 * time.Second),
@@ -65,8 +68,16 @@ func TestOnList(t *testing.T) {
 						RecordPath: filepath.Join(dir, "%path/%Y-%m-%d_%H-%M-%S-%f"),
 					},
 				},
-				AuthManager: test.NilAuthManager,
-				Parent:      test.NilLogger,
+				AuthManager: &test.AuthManager{
+					AuthenticateImpl: func(req *auth.Request) *auth.Error {
+						require.Equal(t, conf.AuthActionPlayback, req.Action)
+						require.Equal(t, "myuser", req.Credentials.User)
+						require.Equal(t, "mypass", req.Credentials.Pass)
+						checked = true
+						return nil
+					},
+				},
+				Parent: test.NilLogger,
 			}
 			err = s.Initialize()
 			require.NoError(t, err)
@@ -173,6 +184,8 @@ func TestOnList(t *testing.T) {
 					},
 				}, out)
 			}
+
+			require.True(t, checked)
 		})
 	}
 }

@@ -8,13 +8,14 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/bluenviron/gohlslib/v2"
-	"github.com/bluenviron/gortsplib/v4"
-	"github.com/bluenviron/gortsplib/v4/pkg/auth"
+	"github.com/bluenviron/gortsplib/v5"
+	"github.com/bluenviron/gortsplib/v5/pkg/auth"
 
 	"github.com/bluenviron/mediamtx/internal/conf/decrypt"
 	"github.com/bluenviron/mediamtx/internal/conf/env"
@@ -45,15 +46,6 @@ func firstThatExists(paths []string) string {
 		}
 	}
 	return ""
-}
-
-func contains(list []auth.VerifyMethod, item auth.VerifyMethod) bool {
-	for _, i := range list {
-		if i == item {
-			return true
-		}
-	}
-	return false
 }
 
 func copyStructFields(dest interface{}, source interface{}) {
@@ -220,29 +212,30 @@ type Conf struct {
 	PlaybackTrustedProxies IPNetworks `json:"playbackTrustedProxies"`
 
 	// RTSP server
-	RTSP               bool             `json:"rtsp"`
-	RTSPDisable        *bool            `json:"rtspDisable,omitempty"` // deprecated
-	Protocols          *RTSPTransports  `json:"protocols,omitempty"`   // deprecated
-	RTSPTransports     RTSPTransports   `json:"rtspTransports"`
-	Encryption         *Encryption      `json:"encryption,omitempty"` // deprecated
-	RTSPEncryption     Encryption       `json:"rtspEncryption"`
-	RTSPAddress        string           `json:"rtspAddress"`
-	RTSPSAddress       string           `json:"rtspsAddress"`
-	RTPAddress         string           `json:"rtpAddress"`
-	RTCPAddress        string           `json:"rtcpAddress"`
-	MulticastIPRange   string           `json:"multicastIPRange"`
-	MulticastRTPPort   int              `json:"multicastRTPPort"`
-	MulticastRTCPPort  int              `json:"multicastRTCPPort"`
-	SRTPAddress        string           `json:"srtpAddress"`
-	SRTCPAddress       string           `json:"srtcpAddress"`
-	MulticastSRTPPort  int              `json:"multicastSRTPPort"`
-	MulticastSRTCPPort int              `json:"multicastSRTCPPort"`
-	ServerKey          *string          `json:"serverKey,omitempty"`
-	ServerCert         *string          `json:"serverCert,omitempty"`
-	RTSPServerKey      string           `json:"rtspServerKey"`
-	RTSPServerCert     string           `json:"rtspServerCert"`
-	AuthMethods        *RTSPAuthMethods `json:"authMethods,omitempty"` // deprecated
-	RTSPAuthMethods    RTSPAuthMethods  `json:"rtspAuthMethods"`
+	RTSP                  bool             `json:"rtsp"`
+	RTSPDisable           *bool            `json:"rtspDisable,omitempty"` // deprecated
+	Protocols             *RTSPTransports  `json:"protocols,omitempty"`   // deprecated
+	RTSPTransports        RTSPTransports   `json:"rtspTransports"`
+	Encryption            *Encryption      `json:"encryption,omitempty"` // deprecated
+	RTSPEncryption        Encryption       `json:"rtspEncryption"`
+	RTSPAddress           string           `json:"rtspAddress"`
+	RTSPSAddress          string           `json:"rtspsAddress"`
+	RTPAddress            string           `json:"rtpAddress"`
+	RTCPAddress           string           `json:"rtcpAddress"`
+	MulticastIPRange      string           `json:"multicastIPRange"`
+	MulticastRTPPort      int              `json:"multicastRTPPort"`
+	MulticastRTCPPort     int              `json:"multicastRTCPPort"`
+	SRTPAddress           string           `json:"srtpAddress"`
+	SRTCPAddress          string           `json:"srtcpAddress"`
+	MulticastSRTPPort     int              `json:"multicastSRTPPort"`
+	MulticastSRTCPPort    int              `json:"multicastSRTCPPort"`
+	ServerKey             *string          `json:"serverKey,omitempty"`
+	ServerCert            *string          `json:"serverCert,omitempty"`
+	RTSPServerKey         string           `json:"rtspServerKey"`
+	RTSPServerCert        string           `json:"rtspServerCert"`
+	AuthMethods           *RTSPAuthMethods `json:"authMethods,omitempty"` // deprecated
+	RTSPAuthMethods       RTSPAuthMethods  `json:"rtspAuthMethods"`
+	RTSPUDPReadBufferSize uint             `json:"rtspUDPReadBufferSize"`
 
 	// RTMP server
 	RTMP           bool       `json:"rtmp"`
@@ -369,9 +362,9 @@ func (conf *Conf) setDefaults() {
 	// RTSP server
 	conf.RTSP = true
 	conf.RTSPTransports = RTSPTransports{
-		gortsplib.TransportUDP:          {},
-		gortsplib.TransportUDPMulticast: {},
-		gortsplib.TransportTCP:          {},
+		gortsplib.ProtocolUDP:          {},
+		gortsplib.ProtocolUDPMulticast: {},
+		gortsplib.ProtocolTCP:          {},
 	}
 	conf.RTSPAddress = ":8554"
 	conf.RTSPSAddress = ":8322"
@@ -631,7 +624,7 @@ func (conf *Conf) Validate(l logger.Writer) error {
 		l.Log(logger.Warn, "parameter 'authMethods' is deprecated and has been replaced with 'rtspAuthMethods'")
 		conf.RTSPAuthMethods = *conf.AuthMethods
 	}
-	if contains(conf.RTSPAuthMethods, auth.VerifyMethodDigestMD5) {
+	if slices.Contains(conf.RTSPAuthMethods, auth.VerifyMethodDigestMD5) {
 		if conf.AuthMethod != AuthMethodInternal {
 			return fmt.Errorf("when RTSP digest is enabled, the only supported auth method is 'internal'")
 		}

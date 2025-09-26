@@ -18,13 +18,13 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - run: make binaries
 
     - run: cd binaries && sha256sum -b * > checksums.sha256
 
-    - uses: actions/attest-build-provenance@v2
+    - uses: actions/attest-build-provenance@v3
       with:
         subject-path: '${{ github.workspace }}/binaries/*'
 
@@ -38,12 +38,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: binaries
         path: binaries
 
-    - uses: actions/github-script@v6
+    - uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -62,8 +62,8 @@ jobs:
             + `\n`
             + `## Security\n`
             + `\n`
-            + `Binaries have been produced by the [Release workflow](https://github.com/${owner}/${repo}/actions/workflows/release.yml)`
-            + ` without human intervention.\n`
+            + `Binaries are compiled from source through the [Release workflow](https://github.com/${owner}/${repo}/actions/workflows/release.yml) without human intervention,`
+            + ` preventing any external interference.\n`
             + `\n`
             + 'You can verify that binaries have been produced by the workflow by using [GitHub Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds):\n'
             + `\n`
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/github-script@v6
+    - uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -149,9 +149,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: binaries
         path: binaries
@@ -160,19 +160,3 @@ jobs:
       env:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-  api_docs:
-    needs: binaries
-    runs-on: ubuntu-22.04
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - run: make apidocs
-
-    - run: mv apidocs/*.html apidocs/index.html
-
-    - uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./apidocs

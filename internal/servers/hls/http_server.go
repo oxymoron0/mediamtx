@@ -16,7 +16,6 @@ import (
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
-	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 )
 
 //go:generate go run ./hlsjsdownloader
@@ -57,11 +56,8 @@ func (s *httpServer) initialize() error {
 
 	router.Use(s.onRequest)
 
-	network, address := restrictnetwork.Restrict("tcp", s.address)
-
 	s.inner = &httpp.Server{
-		Network:     network,
-		Address:     address,
+		Address:     s.address,
 		ReadTimeout: time.Duration(s.readTimeout),
 		Encryption:  s.encryption,
 		ServerCert:  s.serverCert,
@@ -147,20 +143,18 @@ func (s *httpServer) onRequest(ctx *gin.Context) {
 		return
 	}
 
-	req := defs.PathAccessRequest{
-		Name:        dir,
-		Query:       ctx.Request.URL.RawQuery,
-		Publish:     false,
-		Proto:       auth.ProtocolHLS,
-		Credentials: httpp.Credentials(ctx.Request),
-		IP:          net.ParseIP(ctx.ClientIP()),
-	}
-
 	pathConf, err := s.pathManager.FindPathConf(defs.PathFindPathConfReq{
-		AccessRequest: req,
+		AccessRequest: defs.PathAccessRequest{
+			Name:        dir,
+			Query:       ctx.Request.URL.RawQuery,
+			Publish:     false,
+			Proto:       auth.ProtocolHLS,
+			Credentials: httpp.Credentials(ctx.Request),
+			IP:          net.ParseIP(ctx.ClientIP()),
+		},
 	})
 	if err != nil {
-		var terr auth.Error
+		var terr *auth.Error
 		if errors.As(err, &terr) {
 			if terr.AskCredentials {
 				ctx.Header("WWW-Authenticate", `Basic realm="mediamtx"`)
@@ -168,9 +162,9 @@ func (s *httpServer) onRequest(ctx *gin.Context) {
 				return
 			}
 
-			s.Log(logger.Info, "connection %v failed to authenticate: %v", httpp.RemoteAddr(ctx), terr.Message)
+			s.Log(logger.Info, "connection %v failed to authenticate: %v", httpp.RemoteAddr(ctx), terr.Wrapped)
 
-			// wait some seconds to mitigate brute force attacks
+			// wait some seconds to delay brute force attacks
 			<-time.After(auth.PauseAfterError)
 
 			ctx.Writer.WriteHeader(http.StatusUnauthorized)
@@ -189,7 +183,8 @@ func (s *httpServer) onRequest(ctx *gin.Context) {
 		ctx.Writer.Write(hlsIndex)
 
 	default:
-		mux, err := s.parent.getMuxer(serverGetMuxerReq{
+		var mux *muxer
+		mux, err = s.parent.getMuxer(serverGetMuxerReq{
 			path:           dir,
 			remoteAddr:     httpp.RemoteAddr(ctx),
 			query:          ctx.Request.URL.RawQuery,
