@@ -83,4 +83,4 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
 ENV PATH="/usr/local/ffmpeg_cuda/bin:$PATH"
 ENV LD_LIBRARY_PATH="/usr/local/ffmpeg_cuda/lib:$LD_LIBRARY_PATH"
 
-ENTRYPOINT [ "/mediamtx" ]
+CMD [ "/mediamtx" ]
