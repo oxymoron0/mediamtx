@@ -5,17 +5,20 @@ services:
     restart: always
     ports:
       - "8554:8554"
-      - "8189:8189"
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
       - "8889:8889"
       - "9997:9997"
     volumes:
-      - ./mediamtx.yml:/mediamtx.yml
+      # 실제 프로덕션 설정(카메라/TURN 자격증명 포함)은 gitignore된 mediamtx_custom.yml.
+      # 저장소의 mediamtx.yml은 자격증명 없는 참조용 템플릿이다.
+      # 새 호스트: cp mediamtx.yml mediamtx_custom.yml 후 자격증명 채워 사용.
+      - ./mediamtx_custom.yml:/mediamtx.yml
       - ./ffmpeg/:/ffmpeg/
       - ../sources/:/sources/
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # GPU를 CDI로 주입 (daemon-reload 후 GPU 상실 방지, NVIDIA/nvidia-docker #1730).
+    # 선행조건(완료): /etc/cdi/nvidia.yaml 스펙 + daemon.json "features":{"cdi":true}
+    # + docker 데몬 재시작. Engine 28.0.4는 CDI 기본 비활성이라 플래그 필수(28.3.0부터 기본 활성).
+    # 드라이버 업데이트 시 스펙 재생성: sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+    devices:
+      - "nvidia.com/gpu=all"

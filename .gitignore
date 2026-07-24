@@ -6,3 +6,6 @@
 /internal/servers/hls/hls.min.js
 /internal/staticsources/rpicamera/mtxrpicam_*/
 mediamtx_custom.yml
+/_preupgrade_backup_*/
+/nvidia-cdi.reference.yaml
+/local-docs/
